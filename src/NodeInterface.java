@@ -46,5 +46,5 @@ public interface NodeInterface<K, V> extends Remote {
 //  public NodeInterface<K, V> findNodeByHashedId(String hashedId) throws RemoteException;
 
   // For test
-  public String query(String search) throws RemoteException;
+  public String query() throws RemoteException;
 }
