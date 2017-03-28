@@ -22,17 +22,16 @@
         </javac>
     </target>
 
-    <!--&lt;!&ndash;Creates the deployable jar file  &ndash;&gt;-->
-    <!--<target name="jar" depends="compile">-->
-        <!--<jar destfile="${dist.dir}\cs425-mp2.jar" basedir="${build.dir}">-->
-            <!--<manifest>-->
-                <!--<attribute name="Main-Class" value="Node" />-->
-            <!--</manifest>-->
-        <!--</jar>-->
-    <!--</target>-->
+    <!--Creates the deployable jar file  -->
+    <target name="jar" depends="compile">
+        <jar destfile="${dist.dir}\cs425-mp2.jar" basedir="${build.dir}">
+            <manifest>
+                <attribute name="Main-Class" value="StorageController" />
+            </manifest>
+        </jar>
+    </target>
 
-    <!--<target name="main" depends="compile, jar">-->
-    <target name="main" depends="compile">
+    <target name="main" depends="compile, jar">
         <description>Main target</description>
     </target>
 
