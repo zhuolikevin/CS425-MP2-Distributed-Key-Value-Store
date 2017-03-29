@@ -5,12 +5,12 @@ import java.util.ArrayList;
 import java.util.Scanner;
 
 public class StorageController {
-  private Node<String, String> node;
+  private Node node;
 
   StorageController(String vmId) {
     try {
       // Init node
-      node = new Node<>(vmId);
+      node = new Node(vmId);
       Thread.sleep(500);
 
       // Read address book
@@ -23,6 +23,7 @@ public class StorageController {
       }
       br.close();
       node.setupRing(addressList);
+      node.buildFingerTable();
 
       // User input
       userConsole();
@@ -46,6 +47,18 @@ public class StorageController {
             break;
           case "SUCC":
             System.err.println(node.getSuccessor().getName() + ":" + node.getSuccessor().getHashedId());
+            break;
+          case "ALL":
+            ArrayList<NodeInterface> nodeList = node.getAllNodes();
+            for (NodeInterface node : nodeList) {
+              System.err.println(node.getName() + ":" + node.getHashedId());
+            }
+            break;
+          case "FINGER":
+            ArrayList<NodeInterface> fingerTable = node.getFingerTable();
+            for (int i = 0; i < fingerTable.size(); i++) {
+              System.err.println(i + ":" + fingerTable.get(i).getHashedId());
+            }
         }
       } catch (RemoteException e) {
         System.err.println("RemoteException: " + e);

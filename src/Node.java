@@ -7,13 +7,13 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 
-public class Node<K, V> extends UnicastRemoteObject implements DHT, NodeInterface {
+public class Node extends UnicastRemoteObject implements DHT, NodeInterface {
   private String name;
   private String hashedId;
-  private NodeInterface<K, V> successor;
-  private NodeInterface<K, V> predecessor;
+  private NodeInterface successor;
+  private NodeInterface predecessor;
+  private ArrayList<NodeInterface> fingerTable;
   private HashMap<String, String> storage;
-  private HashMap<String, NodeInterface<K, V>> fingerTable;
 
   private static final int HASH_BIT = 7;
 
@@ -22,6 +22,7 @@ public class Node<K, V> extends UnicastRemoteObject implements DHT, NodeInterfac
     this.hashedId = ConsistentHashing.generateHashedId(this.name, (int)Math.pow(2, HASH_BIT));
     this.successor = this;
     this.predecessor = this;
+    this.fingerTable = new ArrayList<>();
 
     Registry registry;
     int port = Integer.parseInt("100" + vmId);
@@ -35,7 +36,7 @@ public class Node<K, V> extends UnicastRemoteObject implements DHT, NodeInterfac
    */
   public void setupRing(ArrayList<String> addressList) {
     try {
-      ArrayList<NodeInterface<String, String>> nodeInterfaceList = new ArrayList<>();
+      ArrayList<NodeInterface> nodeInterfaceList = new ArrayList<>();
       for (int i = 0; i < addressList.size(); i++) {
         String remoteIp = addressList.get(i).split(" ")[0];
         String remoteId = addressList.get(i).split(" ")[1];
@@ -47,15 +48,15 @@ public class Node<K, V> extends UnicastRemoteObject implements DHT, NodeInterfac
           continue;
 
         Registry registry = LocateRegistry.getRegistry(remoteIp, remotePort);
-        NodeInterface<String, String> remoteNode = (NodeInterface<String, String>) registry.lookup(remoteName);
+        NodeInterface remoteNode = (NodeInterface) registry.lookup(remoteName);
 
         nodeInterfaceList.add(remoteNode);
       }
 
       Collections.sort(nodeInterfaceList, new NodeInterfaceComparator());
 
-      NodeInterface<String, String> tempPred = nodeInterfaceList.get(nodeInterfaceList.size() - 1);
-      NodeInterface<String, String> tempSucc = nodeInterfaceList.get(0);
+      NodeInterface tempPred = nodeInterfaceList.get(nodeInterfaceList.size() - 1);
+      NodeInterface tempSucc = nodeInterfaceList.get(0);
       for (int i = 0; i < nodeInterfaceList.size(); i++) {
         if (Integer.parseInt(nodeInterfaceList.get(i).getHashedId()) < Integer.parseInt(this.hashedId)) {
           continue;
@@ -75,6 +76,55 @@ public class Node<K, V> extends UnicastRemoteObject implements DHT, NodeInterfac
     }
   }
 
+  public void buildFingerTable() {
+    ArrayList<NodeInterface> nodeList = getAllNodes();
+    Collections.sort(nodeList, new NodeInterfaceComparator());
+
+    int totalSpace = (int)Math.pow(2, HASH_BIT);
+
+    try {
+      String maxHashedId = nodeList.get(nodeList.size() - 1).getHashedId();
+
+      for (int i = 0; i < HASH_BIT; i++) {
+        int tempRes = (Integer.parseInt(getHashedId()) + (int)Math.pow(2, i)) % totalSpace;
+        NodeInterface candidate;
+
+        if (tempRes > Integer.parseInt(maxHashedId)) {
+          candidate = nodeList.get(0);
+        } else {
+          int j = 0;
+          while (Integer.parseInt(nodeList.get(j).getHashedId()) < tempRes) {
+            j++;
+          }
+          candidate = nodeList.get(j);
+        }
+        this.fingerTable.add(candidate);
+      }
+    } catch (RemoteException e) {
+      System.err.println("RemoteException: " + e);
+    }
+  }
+
+  public ArrayList<NodeInterface> getAllNodes() {
+    ArrayList<NodeInterface> nodeList = new ArrayList<>();
+
+    try {
+      NodeInterface curNode = this;
+      do {
+        nodeList.add(curNode);
+        curNode = curNode.getSuccessor();
+      } while (!curNode.getName().equals(this.getName()));
+    } catch (RemoteException e) {
+      System.err.println("RemoteException: " + e);
+    }
+
+    return nodeList;
+  }
+
+  public ArrayList<NodeInterface> getFingerTable() {
+    return this.fingerTable;
+  }
+
   @Override
   public String getName() {
     return this.name;
@@ -86,12 +136,12 @@ public class Node<K, V> extends UnicastRemoteObject implements DHT, NodeInterfac
   }
 
   @Override
-  public NodeInterface<K, V> getSuccessor() throws RemoteException {
+  public NodeInterface getSuccessor() throws RemoteException {
     return this.successor;
   }
 
   @Override
-  public NodeInterface<K, V> getPredecessor() throws RemoteException {
+  public NodeInterface getPredecessor() throws RemoteException {
     return this.predecessor;
   }
 
@@ -105,9 +155,9 @@ public class Node<K, V> extends UnicastRemoteObject implements DHT, NodeInterfac
     this.predecessor = pred;
   }
 
-  public class NodeInterfaceComparator implements Comparator<NodeInterface<String, String>> {
+  public class NodeInterfaceComparator implements Comparator<NodeInterface> {
     @Override
-    public int compare(NodeInterface<String, String> a, NodeInterface<String, String> b) {
+    public int compare(NodeInterface a, NodeInterface b) {
       try {
         return Integer.parseInt(a.getHashedId()) - Integer.parseInt(b.getHashedId());
       } catch (RemoteException e) {

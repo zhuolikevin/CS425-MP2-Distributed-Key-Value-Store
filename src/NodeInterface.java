@@ -1,7 +1,7 @@
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 
-public interface NodeInterface<K, V> extends Remote {
+public interface NodeInterface extends Remote {
   /**
    * Get name of the node
    * @return node name
@@ -20,28 +20,28 @@ public interface NodeInterface<K, V> extends Remote {
    * @return the successor node
    * @throws RemoteException
    */
-  NodeInterface<K, V> getSuccessor() throws RemoteException;
+  NodeInterface getSuccessor() throws RemoteException;
 
   /**
    * Get predecessor of the node
    * @return the predecessor node
    * @throws RemoteException
    */
-  NodeInterface<K, V> getPredecessor() throws RemoteException;
+  NodeInterface getPredecessor() throws RemoteException;
 
   /**
    * Set the successor of the node to be `successor`
    * @param successor
    * @throws RemoteException
    */
-  void setSuccessor(NodeInterface<K, V> successor) throws RemoteException;
+  void setSuccessor(NodeInterface successor) throws RemoteException;
 
   /**
    * Set the predecessor of the node to be `predecessor`
    * @param predecessor
    * @throws RemoteException
    */
-  void setPredecessor(NodeInterface<K, V> predecessor) throws RemoteException;
+  void setPredecessor(NodeInterface predecessor) throws RemoteException;
 
 //  /**
 //   * Find the corresponding node with a hashed id
