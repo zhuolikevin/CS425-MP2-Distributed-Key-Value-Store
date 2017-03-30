@@ -33,10 +33,10 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
   }
 
   /**
-   * Set up Chord ring structure. Decide predecessor and successor of the node.
+   * Set up Chord structure. Decide predecessor and successor of the node.
    * @param addressList
    */
-  public void setupRing(ArrayList<String> addressList) {
+  public void setupChord(ArrayList<String> addressList) {
     try {
       ArrayList<NodeInterface> nodeInterfaceList = new ArrayList<>();
       for (int i = 0; i < addressList.size(); i++) {
@@ -69,41 +69,48 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
         }
         break;
       }
+
+      // Link the ring
       tempPred.setSuccessor(this);
       tempSucc.setPredecessor(this);
       setSuccessor(tempSucc);
       setPredecessor(tempPred);
+
+      ArrayList<NodeInterface> nodeList = getAllNodes();
+      buildFingerTable(nodeList);
     } catch (Exception e) {
       System.err.println("Exception: " + e);
     }
   }
 
-  /**
-   * Build up finger table of the current node.
-   */
-  public void buildFingerTable() {
-    ArrayList<NodeInterface> nodeList = getAllNodes();
-    Collections.sort(nodeList, new NodeInterfaceComparator());
-
-    int totalSpace = (int)Math.pow(2, HASH_BIT);
-
+  public void leave() {
     try {
-      String maxHashedId = nodeList.get(nodeList.size() - 1).getHashedId();
-
-      for (int i = 0; i < HASH_BIT; i++) {
-        int tempRes = (Integer.parseInt(getHashedId()) + (int)Math.pow(2, i)) % totalSpace;
-        NodeInterface candidate;
-
-        if (tempRes > Integer.parseInt(maxHashedId)) {
-          candidate = nodeList.get(0);
+      // Hand over storage to successors
+      for (String key : storage.keySet()) {
+        // Always keep 3 replicas
+        if (successor.getSuccessor().getLocal(key) != null && successor.getLocal(key) != null) {
+          predecessor.putLocal(key, storage.get(key));
+        } else if (successor.getSuccessor().getLocal(key) == null && successor.getLocal(key) != null) {
+          successor.getSuccessor().putLocal(key, storage.get(key));
         } else {
-          int j = 0;
-          while (Integer.parseInt(nodeList.get(j).getHashedId()) < tempRes) {
-            j++;
-          }
-          candidate = nodeList.get(j);
+          predecessor.getPredecessor().removeLocal(key);
+          successor.putLocal(key, storage.get(key));
+          successor.getSuccessor().putLocal(key, storage.get(key));
         }
-        this.fingerTable.add(candidate);
+      }
+
+      ArrayList<NodeInterface> nodeList = getAllNodes();
+      nodeList.remove(nodeList.indexOf(this));
+
+      // Exit the ring
+      successor.setPredecessor(predecessor);
+      predecessor.setSuccessor(successor);
+      predecessor = this;
+      successor = this;
+
+      // Update all nodes' finger table
+      for (NodeInterface node : nodeList) {
+        node.buildFingerTable(nodeList);
       }
     } catch (RemoteException e) {
       System.err.println("RemoteException: " + e);
@@ -200,6 +207,38 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
   /* NodeInterface Implementation */
 
   @Override
+  public void buildFingerTable(ArrayList<NodeInterface> nodeList) throws RemoteException {
+    Collections.sort(nodeList, new NodeInterfaceComparator());
+    ArrayList<NodeInterface> fingerTable = new ArrayList<>();
+
+    int totalSpace = (int)Math.pow(2, HASH_BIT);
+
+    try {
+      String maxHashedId = nodeList.get(nodeList.size() - 1).getHashedId();
+
+      for (int i = 0; i < HASH_BIT; i++) {
+        int tempRes = (Integer.parseInt(getHashedId()) + (int)Math.pow(2, i)) % totalSpace;
+        NodeInterface candidate;
+
+        if (tempRes > Integer.parseInt(maxHashedId)) {
+          candidate = nodeList.get(0);
+        } else {
+          int j = 0;
+          while (Integer.parseInt(nodeList.get(j).getHashedId()) < tempRes) {
+            j++;
+          }
+          candidate = nodeList.get(j);
+        }
+        fingerTable.add(candidate);
+      }
+    } catch (RemoteException e) {
+      System.err.println("RemoteException: " + e);
+    }
+
+    this.fingerTable = fingerTable;
+  }
+
+  @Override
   public String getName() throws RemoteException {
     return this.name;
   }
@@ -289,6 +328,11 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
   @Override
   public String getLocal(String key) throws RemoteException {
     return storage.get(key);
+  }
+
+  @Override
+  public void removeLocal(String key) throws RemoteException {
+    storage.remove(key);
   }
 
   public class NodeInterfaceComparator implements Comparator<NodeInterface> {

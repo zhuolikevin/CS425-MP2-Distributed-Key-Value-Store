@@ -25,8 +25,7 @@ public class StorageController {
         line = br.readLine();
       }
       br.close();
-      node.setupRing(addressList);
-      node.buildFingerTable();
+      node.setupChord(addressList);
 
       // User input
       userConsole();
@@ -38,7 +37,7 @@ public class StorageController {
   private void userConsole() {
     Scanner scan = new Scanner(System.in);
     String input = scan.nextLine();
-    while(!input.equals("exit")) {
+    while(!input.equals("EXIT")) {
       try {
         String[] inputs = input.split(" ");
         switch (inputs[0]) {
@@ -102,12 +101,18 @@ public class StorageController {
             String inputFile = inputs[1];
             String outputFile = inputs[2];
             batchOperation(inputFile, outputFile);
+            break;
+          default:
+            System.err.println("Invalid command");
         }
       } catch (RemoteException e) {
         System.err.println("RemoteException: " + e);
       }
       input = scan.nextLine();
     }
+    node.leave();
+    scan.close();
+    System.exit(0);
   }
 
   private void batchOperation(String input, String output) {
@@ -152,6 +157,9 @@ public class StorageController {
               pw.println(localKey);
             }
             pw.println("END LIST");
+            break;
+          default:
+            pw.println("Invalid command");
         }
         line = br.readLine();
       }

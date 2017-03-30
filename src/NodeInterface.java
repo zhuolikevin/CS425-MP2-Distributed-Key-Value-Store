@@ -25,6 +25,12 @@ public interface NodeInterface extends Remote {
   ArrayList<NodeInterface> getFingerTable() throws RemoteException;
 
   /**
+   * Initialize or update finger table of the current node.
+   * @param nodeList
+   */
+  void buildFingerTable(ArrayList<NodeInterface> nodeList) throws RemoteException;
+
+  /**
    * Get local storage of the node
    * @return local storage in HashMap
    * @throws RemoteException
@@ -82,4 +88,11 @@ public interface NodeInterface extends Remote {
    * @throws RemoteException
    */
   String getLocal(String key) throws RemoteException;
+
+  /**
+   * Remove a key in this node locally
+   * @param key
+   * @throws RemoteException
+   */
+  void removeLocal(String key) throws RemoteException;
 }
