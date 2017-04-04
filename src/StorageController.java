@@ -17,7 +17,7 @@ public class StorageController {
       Thread.sleep(500);
 
       // Read address book
-      BufferedReader br = new BufferedReader(new FileReader(RES_PREFIX + "address.txt"));
+      BufferedReader br = new BufferedReader(new FileReader(RES_PREFIX + "address_local.txt"));
       String line = br.readLine();
       ArrayList<String> addressList = new ArrayList<>();
       while (line != null) {
@@ -42,7 +42,7 @@ public class StorageController {
         String[] inputs = input.split(" ");
         switch (inputs[0]) {
           /* Commands for debugging */
-          case "HASH":
+          case "ME":
             System.err.println(node.getName() + ":" + node.getHashedId());
             break;
           case "PRED":
@@ -57,15 +57,20 @@ public class StorageController {
               System.err.println(node.getName() + ":" + node.getHashedId());
             }
             break;
-          case "FINGER":
-            ArrayList<NodeInterface> fingerTable = node.getFingerTable();
-            for (int i = 0; i < fingerTable.size(); i++) {
-              System.err.println(i + ":" + fingerTable.get(i).getHashedId());
+          case "MEMBER":
+            HashMap<Integer, NodeInterface> membershipTable = node.getMembershipTable();
+            for (int hashedId : membershipTable.keySet()) {
+              System.err.println(hashedId + ":" + membershipTable.get(hashedId).getName());
             }
+            break;
+          case "HASH":
+            String key = inputs[1];
+            String hashedId = ConsistentHashing.generateHashedId(key, (int)Math.pow(2, Node.HASH_BIT));
+            System.err.println(hashedId);
             break;
           /* Commands for mp requirements */
           case "SET":
-            String key = inputs[1];
+            key = inputs[1];
             String value = inputs[2];
             node.put(key, value);
             System.out.println("SET OK");

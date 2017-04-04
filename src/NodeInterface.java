@@ -18,17 +18,18 @@ public interface NodeInterface extends Remote {
   String getHashedId() throws RemoteException;
 
   /**
-   * Get finger table of the node
-   * @return finger table in ArrayList
+   * Get membership table of the node
+   * @return membership table in HashMap
    * @throws RemoteException
    */
-  ArrayList<NodeInterface> getFingerTable() throws RemoteException;
+  HashMap<Integer, NodeInterface> getMembershipTable() throws RemoteException;
 
   /**
-   * Initialize or update finger table of the current node.
+   * Initialize or update membership table of the current node.
    * @param nodeList
+   * @throws RemoteException
    */
-  void buildFingerTable(ArrayList<NodeInterface> nodeList) throws RemoteException;
+  void buildMembershipTable(ArrayList<NodeInterface> nodeList) throws RemoteException;
 
   /**
    * Get local storage of the node

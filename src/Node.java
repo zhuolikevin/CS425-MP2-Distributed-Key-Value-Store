@@ -12,18 +12,18 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
   private String hashedId;
   private NodeInterface successor;
   private NodeInterface predecessor;
-  private ArrayList<NodeInterface> fingerTable;
+  private HashMap<Integer, NodeInterface> membershipTable;
   private HashMap<String, String> storage;
 
-  private static final int HASH_BIT = 7;
   private static final String NAME_PREFIX = "vm-";
+  public static final int HASH_BIT = 7;
 
   Node(String vmId) throws RemoteException {
     this.name = NAME_PREFIX + vmId;
     this.hashedId = ConsistentHashing.generateHashedId(this.name, (int)Math.pow(2, HASH_BIT));
     this.successor = this;
     this.predecessor = this;
-    this.fingerTable = new ArrayList<>();
+    this.membershipTable = new HashMap<>();
     this.storage = new HashMap<>();
 
     Registry registry;
@@ -77,7 +77,7 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
       setPredecessor(tempPred);
 
       ArrayList<NodeInterface> nodeList = getAllNodes();
-      buildFingerTable(nodeList);
+      buildMembershipTable(nodeList);
     } catch (Exception e) {
       System.err.println("Exception: " + e);
     }
@@ -110,7 +110,7 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
 
       // Update all nodes' finger table
       for (NodeInterface node : nodeList) {
-        node.buildFingerTable(nodeList);
+        node.buildMembershipTable(nodeList);
       }
     } catch (RemoteException e) {
       System.err.println("RemoteException: " + e);
@@ -207,35 +207,20 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
   /* NodeInterface Implementation */
 
   @Override
-  public void buildFingerTable(ArrayList<NodeInterface> nodeList) throws RemoteException {
+  public void buildMembershipTable(ArrayList<NodeInterface> nodeList) throws RemoteException {
     Collections.sort(nodeList, new NodeInterfaceComparator());
-    ArrayList<NodeInterface> fingerTable = new ArrayList<>();
-
-    int totalSpace = (int)Math.pow(2, HASH_BIT);
+    HashMap<Integer, NodeInterface> membershipTable = new HashMap<>();
 
     try {
-      String maxHashedId = nodeList.get(nodeList.size() - 1).getHashedId();
-
-      for (int i = 0; i < HASH_BIT; i++) {
-        int tempRes = (Integer.parseInt(getHashedId()) + (int)Math.pow(2, i)) % totalSpace;
-        NodeInterface candidate;
-
-        if (tempRes > Integer.parseInt(maxHashedId)) {
-          candidate = nodeList.get(0);
-        } else {
-          int j = 0;
-          while (Integer.parseInt(nodeList.get(j).getHashedId()) < tempRes) {
-            j++;
-          }
-          candidate = nodeList.get(j);
-        }
-        fingerTable.add(candidate);
+      for (NodeInterface curNode : nodeList ) {
+        int curHashedId = Integer.parseInt(curNode.getHashedId());
+        membershipTable.put(curHashedId, curNode);
       }
     } catch (RemoteException e) {
       System.err.println("RemoteException: " + e);
     }
 
-    this.fingerTable = fingerTable;
+    this.membershipTable = membershipTable;
   }
 
   @Override
@@ -249,8 +234,8 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
   }
 
   @Override
-  public ArrayList<NodeInterface> getFingerTable() throws RemoteException {
-    return this.fingerTable;
+  public HashMap<Integer, NodeInterface> getMembershipTable() throws RemoteException {
+    return this.membershipTable;
   }
 
   @Override
@@ -280,44 +265,23 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
 
   @Override
   public NodeInterface findNodeByHashedId(String hashedId) throws RemoteException {
-    String predHashedId = predecessor.getHashedId();
-    String succHashedId = successor.getHashedId();
+    ArrayList<Integer> hashedIdList = new ArrayList<>(membershipTable.keySet());
+    Collections.sort(hashedIdList);
+    int hashedIdValue = Integer.parseInt(hashedId);
+    NodeInterface targetNode = this;
 
-    if (ConsistentHashing.isHashedIdBetween(hashedId, predHashedId, this.hashedId)) {
-      return this;
-    } else if (ConsistentHashing.isHashedIdBetween(hashedId, this.hashedId, succHashedId)) {
-      return successor;
+    if (hashedIdValue <= hashedIdList.get(0) || hashedIdValue > hashedIdList.get(hashedIdList.size() - 1)) {
+      targetNode = membershipTable.get(hashedIdList.get(0));
     } else {
-      // Largest finger entry <= k (i.e. hashedId)
-      NodeInterface candidate = null;
-      // Largest finger entry
-      NodeInterface maxCandidate = null;
-
-      for (int i = 0; i < fingerTable.size(); i++) {
-        String curHashedId = fingerTable.get(i).getHashedId();
-
-        if (maxCandidate == null || Integer.parseInt(maxCandidate.getHashedId()) < Integer.parseInt(curHashedId)) {
-          maxCandidate = fingerTable.get(i);
+      for (int i = 1; i < hashedIdList.size(); i++) {
+        if (hashedIdList.get(i) >= hashedIdValue) {
+          targetNode = membershipTable.get(hashedIdList.get(i));
+          break;
         }
-
-        if (Integer.parseInt(curHashedId) > Integer.parseInt(hashedId)) {
-          continue;
-        } else if (Integer.parseInt(curHashedId) == Integer.parseInt(hashedId)) {
-          return fingerTable.get(i);
-        } else if (candidate == null) {
-          candidate = fingerTable.get(i);
-        } else if (Integer.parseInt(candidate.getHashedId()) < Integer.parseInt(curHashedId)) {
-          candidate = fingerTable.get(i);
-        }
-      }
-
-      // Continue searching in largest finger entry <= k (i.e. hashedId) OR largest finger entry
-      if (candidate != null) {
-        return candidate.findNodeByHashedId(hashedId);
-      } else {
-        return maxCandidate.findNodeByHashedId(hashedId);
       }
     }
+
+    return targetNode;
   }
 
   @Override
