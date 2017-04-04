@@ -85,12 +85,42 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
       ArrayList<NodeInterface> nodeList = getAllNodes();
       buildMembershipTable(nodeList);
 
-      // TODO: Rebalance keys
+      // Rebalance keys
+      rebalance(this);
     } catch (Exception e) {
       System.err.println("Exception: " + e);
     }
   }
 
+  public void rebalance(NodeInterface newNode) {
+    try {
+      NodeInterface succ = newNode.getSuccessor();
+      HashMap<String, String> succStorage = succ.getLocalStorage();
+
+      for (String key : succStorage.keySet()) {
+        String keyHashedId = ConsistentHashing.generateHashedId(key, (int)Math.pow(2, HASH_BIT));
+        if (findNodeByHashedId(keyHashedId).getHashedId().equals(newNode.getPredecessor().getHashedId())) {
+          // This key's hashed position is newNode's predecessor
+          newNode.putLocal(key, succStorage.get(key));
+          succ.removeLocal(key);
+        } else if (findNodeByHashedId(keyHashedId).getHashedId().equals(newNode.getHashedId())) {
+          // This key's hashed node is newNode
+          newNode.putLocal(key, succStorage.get(key));
+          succ.getSuccessor().removeLocal(key);
+        } else if (findNodeByHashedId(keyHashedId).getHashedId().equals(newNode.getSuccessor().getHashedId())) {
+          // This key's hashed node is newNode's successor
+          newNode.putLocal(key, succStorage.get(key));
+          newNode.getPredecessor().removeLocal(key);
+        }
+      }
+    } catch (RemoteException e) {
+      System.err.println("RemoteException: " + e);
+    }
+  }
+
+  /**
+   * Current node leave the network, handover its keys and other nodes rebuild the ring structure
+   */
   public void leave() {
     try {
       // Hand over storage to successors
