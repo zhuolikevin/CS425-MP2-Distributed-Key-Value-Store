@@ -37,28 +37,33 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
    * @param addressList
    */
   public void setupChord(ArrayList<String> addressList) {
-    try {
-      ArrayList<NodeInterface> nodeInterfaceList = new ArrayList<>();
-      for (int i = 0; i < addressList.size(); i++) {
-        String remoteIp = addressList.get(i).split(" ")[0];
-        String remoteId = addressList.get(i).split(" ")[1];
+    // Connect to all the active remote nodes
+    ArrayList<NodeInterface> nodeInterfaceList = new ArrayList<>();
+    for (int i = 0; i < addressList.size(); i++) {
+      String remoteIp = addressList.get(i).split(" ")[0];
+      String remoteId = addressList.get(i).split(" ")[1];
 
-        int remotePort = Integer.parseInt("100" + remoteId);
-        String remoteName = NAME_PREFIX + remoteId;
+      int remotePort = Integer.parseInt("100" + remoteId);
+      String remoteName = NAME_PREFIX + remoteId;
 
-        if (remoteName.equals(this.name))
-          continue;
-
+      if (remoteName.equals(this.name))
+        continue;
+      try {
         Registry registry = LocateRegistry.getRegistry(remoteIp, remotePort);
         NodeInterface remoteNode = (NodeInterface) registry.lookup(remoteName);
 
         nodeInterfaceList.add(remoteNode);
+      } catch (Exception e) {
+        // Exception indicates the node is not online, just skip
+        continue;
       }
+    }
 
-      Collections.sort(nodeInterfaceList, new NodeInterfaceComparator());
-
-      NodeInterface tempPred = nodeInterfaceList.get(nodeInterfaceList.size() - 1);
-      NodeInterface tempSucc = nodeInterfaceList.get(0);
+    Collections.sort(nodeInterfaceList, new NodeInterfaceComparator());
+    NodeInterface tempPred = nodeInterfaceList.get(nodeInterfaceList.size() - 1);
+    NodeInterface tempSucc = nodeInterfaceList.get(0);
+    try {
+      // Find predecessor and successor
       for (int i = 0; i < nodeInterfaceList.size(); i++) {
         if (Integer.parseInt(nodeInterfaceList.get(i).getHashedId()) < Integer.parseInt(this.hashedId)) {
           continue;
@@ -70,14 +75,17 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
         break;
       }
 
-      // Link the ring
+      // link the ring
       tempPred.setSuccessor(this);
       tempSucc.setPredecessor(this);
       setSuccessor(tempSucc);
       setPredecessor(tempPred);
 
+      // Build membership table
       ArrayList<NodeInterface> nodeList = getAllNodes();
       buildMembershipTable(nodeList);
+
+      // TODO: Rebalance keys
     } catch (Exception e) {
       System.err.println("Exception: " + e);
     }
