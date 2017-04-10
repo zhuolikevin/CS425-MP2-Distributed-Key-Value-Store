@@ -1,8 +1,5 @@
-SET kevin 123
-GET kevin
-OWNERS kevin
-SET ted 234
-OWNERS ted
-SET kevin 345
-GET kevin
-LIST_LOCAL
+SET A 1
+SET B 2
+SET C 3
+SET D 4
+SET E 5

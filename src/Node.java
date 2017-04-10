@@ -2,18 +2,19 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
+import java.util.*;
 
 public class Node extends UnicastRemoteObject implements NodeInterface {
   private String name;
   private String hashedId;
+  private boolean recoverStatus;
   private NodeInterface successor;
   private NodeInterface predecessor;
   private HashMap<Integer, NodeInterface> membershipTable;
   private HashMap<String, String> storage;
+
+  private HashMap<String, Timer> heartBeaterTimerMap;
+  private HashMap<String, HeartBeater> heartBeaterTaskMap;
 
   private static final String NAME_PREFIX = "vm-";
   public static final int HASH_BIT = 7;
@@ -21,10 +22,14 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
   Node(String vmId) throws RemoteException {
     this.name = NAME_PREFIX + vmId;
     this.hashedId = ConsistentHashing.generateHashedId(this.name, (int)Math.pow(2, HASH_BIT));
+    this.recoverStatus = false;
     this.successor = this;
     this.predecessor = this;
     this.membershipTable = new HashMap<>();
     this.storage = new HashMap<>();
+
+    this.heartBeaterTimerMap = new HashMap<>();
+    this.heartBeaterTaskMap = new HashMap<>();
 
     Registry registry;
     int port = Integer.parseInt("100" + vmId);
@@ -59,6 +64,28 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
       }
     }
 
+//    boolean joinDelay;
+//    do {
+//      joinDelay = false;
+//
+//      try {
+//        Thread.sleep(1000);
+//      } catch (Exception e) {
+//        System.err.println("Exception 21: " + e);
+//      }
+//
+//      for (NodeInterface remoteNode : nodeInterfaceList) {
+//        try {
+//          if (remoteNode.getRecoverStatus()) {
+//            joinDelay = true;
+//            break;
+//          }
+//        } catch (Exception e) {
+//          System.err.println("Exception 20: " + e);
+//        }
+//      }
+//    } while (joinDelay);
+
     Collections.sort(nodeInterfaceList, new NodeInterfaceComparator());
     NodeInterface tempPred = nodeInterfaceList.get(nodeInterfaceList.size() - 1);
     NodeInterface tempSucc = nodeInterfaceList.get(0);
@@ -84,11 +111,24 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
       // Build membership table
       ArrayList<NodeInterface> nodeList = getAllNodes();
       buildMembershipTable(nodeList);
+      for (NodeInterface node : nodeList) {
+        if (!node.getHashedId().equals(hashedId)) {
+          node.updateMembershipTable();
+        }
+      }
+
+      // Setup HeartBeater
+      for (Integer hashedIdValue : membershipTable.keySet()) {
+        if (!String.valueOf(hashedIdValue).equals(hashedId)) {
+          setupHeartBeat(String.valueOf(hashedIdValue));
+          membershipTable.get(hashedIdValue).setupHeartBeat(hashedId);
+        }
+      }
 
       // Rebalance keys
       rebalance(this);
-    } catch (Exception e) {
-      System.err.println("Exception: " + e);
+    } catch (Exception setupChordE) {
+      System.err.println("[SetupChord Exception]" + setupChordE);
     }
   }
 
@@ -113,8 +153,8 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
           newNode.getPredecessor().removeLocal(key);
         }
       }
-    } catch (RemoteException e) {
-      System.err.println("RemoteException: " + e);
+    } catch (Exception rebalanceE) {
+      System.err.println("[Rebalance Exception]" + rebalanceE);
     }
   }
 
@@ -146,12 +186,15 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
       predecessor = this;
       successor = this;
 
-      // Update all nodes' finger table
+      // Update all nodes' membership table, and remove heartbeat
       for (NodeInterface node : nodeList) {
-        node.buildMembershipTable(nodeList);
+        if (!node.getHashedId().equals(hashedId)) {
+          node.buildMembershipTable(nodeList);
+          node.removeHeartBeat(hashedId);
+        }
       }
-    } catch (RemoteException e) {
-      System.err.println("RemoteException: " + e);
+    } catch (Exception leaveE) {
+      System.err.println("[Leave Exception]" + leaveE);
     }
   }
 
@@ -169,7 +212,7 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
         curNode = curNode.getSuccessor();
       } while (!curNode.getName().equals(this.getName()));
     } catch (RemoteException e) {
-      System.err.println("RemoteException: " + e);
+      System.err.println("Exception4: " + e);
     }
 
     return nodeList;
@@ -190,8 +233,8 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
       // Back up replicas in predecessor and successor
       targetNode.getPredecessor().putLocal(key, value);
       targetNode.getSuccessor().putLocal(key, value);
-    } catch (RemoteException e) {
-      System.err.println("RemoteException: " + e);
+    } catch (Exception putE) {
+      System.err.println("[Set Key Exception]" + putE);
     }
   }
 
@@ -207,8 +250,8 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
     try {
       NodeInterface targetNode = findNodeByHashedId(hashedId);
       value  = targetNode.getLocal(key);
-    } catch (RemoteException e) {
-      System.err.println("RemoteException: " + e);
+    } catch (RemoteException getE) {
+      System.err.println("[Get Key Exception]" + getE);
     }
 
     return value;
@@ -235,11 +278,19 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
       if (targetNode.getSuccessor().getLocal(key) != null) {
         owners.add(targetNode.getSuccessor());
       }
-    } catch (RemoteException e) {
-      System.err.println("RemoteException: " + e);
+    } catch (RemoteException findOwnersE) {
+      System.err.println("[Find Owners Exception]" + findOwnersE);
     }
 
     return owners;
+  }
+
+  /**
+   * Get heartBeaterTaskMap. Mainly for debugging
+   * @return heartbeater task map in HashMap
+   */
+  public HashMap<String, HeartBeater> getHeartBeaterTaskMap() {
+    return heartBeaterTaskMap;
   }
 
   /* NodeInterface Implementation */
@@ -255,10 +306,21 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
         membershipTable.put(curHashedId, curNode);
       }
     } catch (RemoteException e) {
-      System.err.println("RemoteException: " + e);
+      System.err.println("Exception8: " + e);
     }
 
     this.membershipTable = membershipTable;
+  }
+
+  @Override
+  public void updateMembershipTable() throws RemoteException {
+    ArrayList<NodeInterface> nodeList = getAllNodes();
+    for (NodeInterface node : nodeList) {
+      if (membershipTable.containsKey(Integer.parseInt(node.getHashedId()))) {
+        continue;
+      }
+      membershipTable.put(Integer.parseInt(node.getHashedId()), node);
+    }
   }
 
   @Override
@@ -272,8 +334,23 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
   }
 
   @Override
+  public boolean getRecoverStatus() throws RemoteException {
+    return this.recoverStatus;
+  }
+
+  @Override
+  public void setRecoverStatus(boolean flag) throws RemoteException {
+    this.recoverStatus = flag;
+  }
+
+  @Override
   public HashMap<Integer, NodeInterface> getMembershipTable() throws RemoteException {
     return this.membershipTable;
+  }
+
+  @Override
+  public void removeMembership(Integer hashedIdValue) throws RemoteException {
+    membershipTable.remove(hashedIdValue);
   }
 
   @Override
@@ -337,13 +414,35 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
     storage.remove(key);
   }
 
+  @Override
+  public void setupHeartBeat(String hashedId) throws RemoteException {
+    if (!heartBeaterTaskMap.containsKey(hashedId)) {
+      NodeInterface remoteNode = membershipTable.get(Integer.parseInt(hashedId));
+      try {
+        heartBeaterTimerMap.put(hashedId, new Timer(true));
+        heartBeaterTaskMap.put(hashedId, new HeartBeater(this, remoteNode));
+        heartBeaterTimerMap.get(hashedId).schedule(heartBeaterTaskMap.get(hashedId), 0, 1000);
+      } catch (Exception e) {
+        System.err.println("Exception9: " + e);
+      }
+    }
+  }
+
+  @Override
+  public void removeHeartBeat(String hashedId) throws RemoteException {
+    heartBeaterTimerMap.get(hashedId).cancel();
+    heartBeaterTaskMap.get(hashedId).cancel();
+    heartBeaterTimerMap.remove(hashedId);
+    heartBeaterTaskMap.remove(hashedId);
+  }
+
   public class NodeInterfaceComparator implements Comparator<NodeInterface> {
     @Override
     public int compare(NodeInterface a, NodeInterface b) {
       try {
         return Integer.parseInt(a.getHashedId()) - Integer.parseInt(b.getHashedId());
       } catch (RemoteException e) {
-        System.err.println("RemoteException: " + e);
+        System.err.println("Exception10: " + e);
         return -1;
       }
     }

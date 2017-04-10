@@ -30,7 +30,7 @@ public class StorageController {
       // User input
       userConsole();
     } catch (Exception e) {
-      System.err.println("Exception: " + e);
+      System.err.println("Exception15: " + e);
     }
   }
 
@@ -57,41 +57,66 @@ public class StorageController {
               System.err.println(node.getName() + ":" + node.getHashedId());
             }
             break;
+          case "RECOVER":
+            System.err.println(node.getRecoverStatus());
+            break;
           case "MEMBER":
             HashMap<Integer, NodeInterface> membershipTable = node.getMembershipTable();
             for (int hashedId : membershipTable.keySet()) {
               System.err.println(hashedId + ":" + membershipTable.get(hashedId).getName());
             }
             break;
+          case "HB":
+            HashMap<String, HeartBeater> heartBeaterTaskMap = node.getHeartBeaterTaskMap();
+            for (String hashedId : heartBeaterTaskMap.keySet()) {
+              System.err.println(hashedId + ":" + heartBeaterTaskMap.get(hashedId).remoteNode.getName());
+            }
+            break;
           case "HASH":
-            String key = inputs[1];
-            String hashedId = ConsistentHashing.generateHashedId(key, (int)Math.pow(2, Node.HASH_BIT));
-            System.err.println(hashedId);
+            if (inputs.length < 2) {
+              System.err.println("Invalid command");
+            } else {
+              String key = inputs[1];
+              String hashedId = ConsistentHashing.generateHashedId(key, (int) Math.pow(2, Node.HASH_BIT));
+              System.err.println(hashedId);
+            }
             break;
           /* Commands for mp requirements */
           case "SET":
-            key = inputs[1];
-            String value = inputs[2];
-            node.put(key, value);
-            System.out.println("SET OK");
+            if (inputs.length < 3) {
+              System.err.println("Invalid command");
+            } else {
+              String key = inputs[1];
+              String value = inputs[2];
+              node.put(key, value);
+              System.out.println("SET OK");
+            }
             break;
           case "GET":
-            key = inputs[1];
-            value = node.get(key);
-            if (value == null) {
-              System.out.println("Not found");
+            if (inputs.length < 2) {
+              System.err.println("Invalid command");
             } else {
-              System.out.println("Found: " + value);
+              String key = inputs[1];
+              String value = node.get(key);
+              if (value == null) {
+                System.out.println("Not found");
+              } else {
+                System.out.println("Found: " + value);
+              }
             }
             break;
           case "OWNERS":
-            key = inputs[1];
-            ArrayList<NodeInterface> owners = node.findOwners(key);
-            ArrayList<String> ownerNames = new ArrayList<>();
-            for (NodeInterface node : owners) {
-              ownerNames.add(node.getName());
+            if (inputs.length < 2) {
+              System.err.println("Invalid command");
+            } else {
+              String key = inputs[1];
+              ArrayList<NodeInterface> owners = node.findOwners(key);
+              ArrayList<String> ownerNames = new ArrayList<>();
+              for (NodeInterface node : owners) {
+                ownerNames.add(node.getName());
+              }
+              System.out.println(String.join(" ", ownerNames));
             }
-            System.out.println(String.join(" ", ownerNames));
             break;
           case "LIST_LOCAL":
             HashMap<String, String> localStorage = node.getLocalStorage();
@@ -103,15 +128,19 @@ public class StorageController {
             System.out.println("END LIST");
             break;
           case "BATCH":
-            String inputFile = inputs[1];
-            String outputFile = inputs[2];
-            batchOperation(inputFile, outputFile);
+            if (inputs.length < 3) {
+              System.err.println("Invalid command");
+            } else {
+              String inputFile = inputs[1];
+              String outputFile = inputs[2];
+              batchOperation(inputFile, outputFile);
+            }
             break;
           default:
             System.err.println("Invalid command");
         }
       } catch (RemoteException e) {
-        System.err.println("RemoteException: " + e);
+        System.err.println("Exception16: " + e);
       }
       input = scan.nextLine();
     }
@@ -170,7 +199,7 @@ public class StorageController {
       }
       pw.close();
     } catch (Exception e) {
-      System.err.println("Exception: " + e);
+      System.err.println("Exception17: " + e);
     }
   }
 

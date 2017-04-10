@@ -17,6 +17,10 @@ public interface NodeInterface extends Remote {
    */
   String getHashedId() throws RemoteException;
 
+  boolean getRecoverStatus() throws RemoteException;
+
+  void setRecoverStatus(boolean flag) throws RemoteException;
+
   /**
    * Get membership table of the node
    * @return membership table in HashMap
@@ -24,12 +28,16 @@ public interface NodeInterface extends Remote {
    */
   HashMap<Integer, NodeInterface> getMembershipTable() throws RemoteException;
 
+  void removeMembership(Integer hashedIdValue) throws RemoteException;
+
   /**
    * Initialize or update membership table of the current node.
    * @param nodeList
    * @throws RemoteException
    */
   void buildMembershipTable(ArrayList<NodeInterface> nodeList) throws RemoteException;
+
+  void updateMembershipTable() throws RemoteException;
 
   /**
    * Get local storage of the node
@@ -96,4 +104,8 @@ public interface NodeInterface extends Remote {
    * @throws RemoteException
    */
   void removeLocal(String key) throws RemoteException;
+
+  void setupHeartBeat(String hashedId) throws RemoteException;
+
+  void removeHeartBeat(String hashedId) throws RemoteException;
 }

@@ -4,4 +4,4 @@ DS.Store
 
 bin/
 dist/
-*.class
+**/*.class
