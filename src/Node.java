@@ -64,27 +64,36 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
       }
     }
 
-//    boolean joinDelay;
-//    do {
-//      joinDelay = false;
-//
-//      try {
-//        Thread.sleep(1000);
-//      } catch (Exception e) {
-//        System.err.println("Exception 21: " + e);
-//      }
-//
-//      for (NodeInterface remoteNode : nodeInterfaceList) {
-//        try {
-//          if (remoteNode.getRecoverStatus()) {
-//            joinDelay = true;
-//            break;
-//          }
-//        } catch (Exception e) {
-//          System.err.println("Exception 20: " + e);
-//        }
-//      }
-//    } while (joinDelay);
+    boolean joinDelay;
+    int count = 0;
+    do {
+      joinDelay = false;
+
+      count++;
+      System.err.println("In delay, count: " + count);
+      System.err.println("In delay, begin loop flag: " + joinDelay);
+
+      try {
+        Thread.sleep(1000);
+      } catch (Exception joinDelayE) {
+        System.err.println("[Join Delay Exception]" + joinDelayE);
+      }
+
+      for (NodeInterface remoteNode : nodeInterfaceList) {
+        try {
+          if (remoteNode.getRecoverStatus()) {
+            joinDelay = true;
+            break;
+          }
+        } catch (Exception joinTraversalE) {
+          System.err.println("[Join Traversal Exception]" + joinTraversalE);
+        }
+      }
+
+      System.err.println("In delay, end loop flag: " + joinDelay);
+    } while (joinDelay);
+
+    System.err.println("Delay times: " + count);
 
     Collections.sort(nodeInterfaceList, new NodeInterfaceComparator());
     NodeInterface tempPred = nodeInterfaceList.get(nodeInterfaceList.size() - 1);
@@ -125,36 +134,14 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
         }
       }
 
+      ArrayList<Integer> membershipList = new ArrayList<>(membershipTable.keySet());
+      NodeInterface leader = membershipTable.get(Collections.max(membershipList));
+
       // Rebalance keys
-      rebalance(this);
+//      rebalance(this);
+      leader.rebalance();
     } catch (Exception setupChordE) {
       System.err.println("[SetupChord Exception]" + setupChordE);
-    }
-  }
-
-  public void rebalance(NodeInterface newNode) {
-    try {
-      NodeInterface succ = newNode.getSuccessor();
-      HashMap<String, String> succStorage = succ.getLocalStorage();
-
-      for (String key : succStorage.keySet()) {
-        String keyHashedId = ConsistentHashing.generateHashedId(key, (int)Math.pow(2, HASH_BIT));
-        if (findNodeByHashedId(keyHashedId).getHashedId().equals(newNode.getPredecessor().getHashedId())) {
-          // This key's hashed position is newNode's predecessor
-          newNode.putLocal(key, succStorage.get(key));
-          succ.removeLocal(key);
-        } else if (findNodeByHashedId(keyHashedId).getHashedId().equals(newNode.getHashedId())) {
-          // This key's hashed node is newNode
-          newNode.putLocal(key, succStorage.get(key));
-          succ.getSuccessor().removeLocal(key);
-        } else if (findNodeByHashedId(keyHashedId).getHashedId().equals(newNode.getSuccessor().getHashedId())) {
-          // This key's hashed node is newNode's successor
-          newNode.putLocal(key, succStorage.get(key));
-          newNode.getPredecessor().removeLocal(key);
-        }
-      }
-    } catch (Exception rebalanceE) {
-      System.err.println("[Rebalance Exception]" + rebalanceE);
     }
   }
 
@@ -171,9 +158,7 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
         } else if (successor.getSuccessor().getLocal(key) == null && successor.getLocal(key) != null) {
           successor.getSuccessor().putLocal(key, storage.get(key));
         } else {
-          predecessor.getPredecessor().removeLocal(key);
           successor.putLocal(key, storage.get(key));
-          successor.getSuccessor().putLocal(key, storage.get(key));
         }
       }
 
@@ -324,6 +309,49 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
   }
 
   @Override
+  public void rebalance() throws RemoteException {
+    // Get all keys in the system
+    HashMap<String, String> allKeysMap = new HashMap<>();
+    try {
+      for (Integer hashedIdValue : membershipTable.keySet()) {
+        HashMap<String, String> localStorage = membershipTable.get(hashedIdValue).getLocalStorage();
+        for (String key : localStorage.keySet()) {
+          allKeysMap.put(key, localStorage.get(key));
+        }
+      }
+    } catch (Exception getAllKeyE) {
+      System.err.println("[Get All Keys Exception]" + getAllKeyE);
+    }
+
+    // Remove all keys in the system
+    try {
+      for (Integer hashedIdValue : membershipTable.keySet()) {
+        HashMap<String, String> localStorageReplica = new HashMap<>(membershipTable.get(hashedIdValue).getLocalStorage());
+        for (String key : localStorageReplica.keySet()) {
+          membershipTable.get(hashedIdValue).removeLocal(key);
+        }
+      }
+    } catch (Exception getAllKeyE) {
+      System.err.println("[Remove All Keys Exception]" + getAllKeyE);
+    }
+
+    // Distribute all keys
+    try {
+      for (String key : allKeysMap.keySet()) {
+        String value = allKeysMap.get(key);
+        String keyHashedId = ConsistentHashing.generateHashedId(key, (int)Math.pow(2, Node.HASH_BIT));
+        NodeInterface keyHashedNode = findNodeByHashedId(keyHashedId);
+
+        keyHashedNode.putLocal(key, value);
+        keyHashedNode.getPredecessor().putLocal(key, value);
+        keyHashedNode.getSuccessor().putLocal(key, value);
+      }
+    } catch (Exception distributeKeyE) {
+      System.err.println("[Distribute Keys Exception]" + distributeKeyE);
+    }
+  }
+
+  @Override
   public String getName() throws RemoteException {
     return this.name;
   }
@@ -421,9 +449,9 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
       try {
         heartBeaterTimerMap.put(hashedId, new Timer(true));
         heartBeaterTaskMap.put(hashedId, new HeartBeater(this, remoteNode));
-        heartBeaterTimerMap.get(hashedId).schedule(heartBeaterTaskMap.get(hashedId), 0, 1000);
-      } catch (Exception e) {
-        System.err.println("Exception9: " + e);
+        heartBeaterTimerMap.get(hashedId).schedule(heartBeaterTaskMap.get(hashedId), 0, 500);
+      } catch (Exception setupHeartBeatE) {
+        System.err.println("[Setup HeartBeat Exception]" + setupHeartBeatE);
       }
     }
   }
@@ -441,8 +469,8 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
     public int compare(NodeInterface a, NodeInterface b) {
       try {
         return Integer.parseInt(a.getHashedId()) - Integer.parseInt(b.getHashedId());
-      } catch (RemoteException e) {
-        System.err.println("Exception10: " + e);
+      } catch (RemoteException comparisionE) {
+        System.err.println("[Comparision Exception]" + comparisionE);
         return -1;
       }
     }

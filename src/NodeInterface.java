@@ -17,8 +17,18 @@ public interface NodeInterface extends Remote {
    */
   String getHashedId() throws RemoteException;
 
+  /**
+   * Get recovery status of the node
+   * @return node recoverStatus flag
+   * @throws RemoteException
+   */
   boolean getRecoverStatus() throws RemoteException;
 
+  /**
+   * Set recovery status of the node
+   * @param flag
+   * @throws RemoteException
+   */
   void setRecoverStatus(boolean flag) throws RemoteException;
 
   /**
@@ -28,6 +38,11 @@ public interface NodeInterface extends Remote {
    */
   HashMap<Integer, NodeInterface> getMembershipTable() throws RemoteException;
 
+  /**
+   * remove a node from membership table
+   * @param hashedIdValue
+   * @throws RemoteException
+   */
   void removeMembership(Integer hashedIdValue) throws RemoteException;
 
   /**
@@ -37,7 +52,17 @@ public interface NodeInterface extends Remote {
    */
   void buildMembershipTable(ArrayList<NodeInterface> nodeList) throws RemoteException;
 
+  /**
+   * When new node join, every node should update there membership table
+   * @throws RemoteException
+   */
   void updateMembershipTable() throws RemoteException;
+
+  /**
+   * Leader re-balance/re-distribute keys
+   * @throws RemoteException
+   */
+  void rebalance() throws RemoteException;
 
   /**
    * Get local storage of the node
@@ -105,7 +130,17 @@ public interface NodeInterface extends Remote {
    */
   void removeLocal(String key) throws RemoteException;
 
+  /**
+   * Setup heart beat to node (with hashedId)
+   * @param hashedId
+   * @throws RemoteException
+   */
   void setupHeartBeat(String hashedId) throws RemoteException;
 
+  /**
+   * Remove heartbeat for a node (with hashedId)
+   * @param hashedId
+   * @throws RemoteException
+   */
   void removeHeartBeat(String hashedId) throws RemoteException;
 }
