@@ -6,6 +6,11 @@
     ```bash
     $ ant
     ```
+    
+    For Ant installation on Linux, try:
+    ```bash
+    $ yum install ant
+    ```
 
  This will generate a directory named `dist/`. The complied and packed `.jar` package is inside.
 
