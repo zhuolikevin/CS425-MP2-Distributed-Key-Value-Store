@@ -17,7 +17,7 @@ public class StorageController {
       Thread.sleep(500);
 
       // Read address book
-      BufferedReader br = new BufferedReader(new FileReader(RES_PREFIX + "address_local.txt"));
+      BufferedReader br = new BufferedReader(new FileReader(RES_PREFIX + "address.txt"));
       String line = br.readLine();
       ArrayList<String> addressList = new ArrayList<>();
       while (line != null) {

@@ -65,13 +65,8 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
     }
 
     boolean joinDelay;
-    int count = 0;
     do {
       joinDelay = false;
-
-      count++;
-      System.err.println("In delay, count: " + count);
-      System.err.println("In delay, begin loop flag: " + joinDelay);
 
       try {
         Thread.sleep(1000);
@@ -89,11 +84,7 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
           System.err.println("[Join Traversal Exception]" + joinTraversalE);
         }
       }
-
-      System.err.println("In delay, end loop flag: " + joinDelay);
     } while (joinDelay);
-
-    System.err.println("Delay times: " + count);
 
     Collections.sort(nodeInterfaceList, new NodeInterfaceComparator());
     NodeInterface tempPred = nodeInterfaceList.get(nodeInterfaceList.size() - 1);
@@ -213,8 +204,30 @@ public class Node extends UnicastRemoteObject implements NodeInterface {
 
     try {
       NodeInterface targetNode = findNodeByHashedId(hashedId);
-      targetNode.putLocal(key, value);
 
+      boolean putDelay;
+      do {
+        putDelay = false;
+
+        try {
+          Thread.sleep(1000);
+        } catch (Exception putDelayE) {
+          System.err.println("[Put Delay Exception]" + putDelayE);
+        }
+
+        for (Integer remoteHasheIdValue : membershipTable.keySet()) {
+          try {
+            if (membershipTable.get(remoteHasheIdValue).getRecoverStatus()) {
+              putDelay = true;
+              break;
+            }
+          } catch (Exception putTraversalE) {
+            System.err.println("[Put Traversal Exception]" + putTraversalE);
+          }
+        }
+      } while (putDelay);
+
+      targetNode.putLocal(key, value);
       // Back up replicas in predecessor and successor
       targetNode.getPredecessor().putLocal(key, value);
       targetNode.getSuccessor().putLocal(key, value);
